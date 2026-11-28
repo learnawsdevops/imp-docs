@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beyond CPU Utilization: Choosing the Right Metrics for EC2 Auto Scaling</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d1d1b;--muted:#6b6b66;--card:#fff;--bd:#e3e1da;--ac:#d9730d;--ok:#2f8f5b;--bad:#c93c3c;--bar:#ecebe5;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#16161a;--fg:#ececea;--muted:#9a9a94;--card:#1f1f25;--bd:#33333b;--ac:#f0953a;--ok:#4cc38a;--bad:#ef6a6a;--bar:#2c2c34;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#16161a;--fg:#ececea;--muted:#9a9a94;--card:#1f1f25;--bd:#33333b;--ac:#f0953a;--ok:#4cc38a;--bad:#ef6a6a;--bar:#2c2c34;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:18px/1.7 Georgia,'Times New Roman',serif}
+main{max-width:720px;margin:0 auto;padding:32px 20px 80px}
+h1{font:800 2rem/1.2 system-ui,sans-serif;margin:.2em 0}
+h2{font:700 1.45rem/1.3 system-ui,sans-serif;margin:2.2em 0 .5em}
+.sub,.lab,button,label,.tag{font-family:system-ui,sans-serif}
+.sub{color:var(--muted);font-size:.9rem}
+code{background:var(--bar);padding:1px 6px;border-radius:4px;font-size:.85em}
+.take{border-left:4px solid var(--ac);padding:2px 14px;margin:1.2em 0;font-weight:600}
+.w{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:18px;margin:1.4em 0;font-family:system-ui,sans-serif;font-size:.95rem;line-height:1.5}
+.w h3{margin:0 0 4px;font-size:1rem}.w p{margin:.2em 0 .8em;color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 14px}
+button{border:1px solid var(--bd);background:var(--bg);color:var(--fg);padding:6px 12px;border-radius:999px;cursor:pointer;font-size:.85rem}
+button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+.row{display:grid;grid-template-columns:130px 1fr 48px;gap:10px;align-items:center;margin:7px 0}
+.bar{height:14px;background:var(--bar);border-radius:7px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok);transition:width .3s,background .3s}
+.bar i.hot{background:var(--bad)}
+.verdict{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bar)}
+.sl{display:grid;grid-template-columns:1fr 70px;gap:8px;align-items:center;margin:8px 0}
+.sl label{grid-column:1/3;color:var(--muted);font-size:.85rem}
+input[type=range]{width:100%;accent-color:var(--ac)}
+.sl b{text-align:right}
+.fleet{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.srv{width:26px;height:32px;border-radius:5px;background:var(--ok);opacity:.9}
+.srv.new{background:var(--ac);animation:pop .4s}
+@keyframes pop{from{transform:scale(.4)}to{transform:scale(1)}}
+.big{font-size:1.15rem;font-weight:700}
+.tag{display:inline-block;background:var(--bar);border-radius:6px;padding:1px 8px;font-size:.8rem;margin:2px 4px 2px 0}
+table{border-collapse:collapse;width:100%;font:.9rem system-ui,sans-serif;display:block;overflow-x:auto}
+td,th{border:1px solid var(--bd);padding:6px 10px;text-align:left}
+@media(max-width:520px){.row{grid-template-columns:96px 1fr 42px}}
+</style>
+</head>
+<body>
+<main>
+<p class="sub">AWS · EC2 Auto Scaling · 8 min read · interactive</p>
+<h1>Beyond CPU Utilization: Choosing the Right Metrics for EC2 Auto Scaling</h1>
+<p>When configuring an EC2 Auto Scaling Group (ASG), CPU utilization is usually the first metric we reach for. A target tracking policy keeps average CPU near 60%: above it, the ASG launches instances; below it, it terminates the ones it doesn’t need.</p>
+<p>That works for many workloads. But what if <b>CPU is only 20%, yet your application is struggling to serve requests?</b> CPU is only one signal. Memory, network, incoming requests or pending jobs can become the bottleneck long before CPU moves.</p>
+
+<div class="w" id="w1"><h3>🔍 Try it: what’s really saturated?</h3><p>Pick a workload. Bars show how close each resource is to its limit.</p><div class="tabs" id="t1"></div><div id="b1"></div><div class="verdict" id="v1"></div></div>
+
+<h2>1. CPU utilization: when it makes sense</h2>
+<p>Two instances behind an Application Load Balancer run CPU-heavy work: image processing, calculations, report generation. As load grows, CPU grows with it. With a 60% target and 85% current average on 2 instances, target tracking estimates the capacity it needs as <code>2 × 85 ÷ 60 ≈ 2.8</code>, so it scales to <b>3</b> instances.</p>
+<p class="take">Use CPU when CPU consumption closely tracks application demand.</p>
+
+<h2>2. ALB request count per target: scale on traffic</h2>
+<p>Picture an e-commerce site during a big sale. CPU may look fine while each instance already receives more requests than it can serve comfortably. The predefined metric <code>ALBRequestCountPerTarget</code> measures the average requests per target <b>per minute</b>, so you scale on demand instead of waiting for CPU.</p>
+<div class="w" id="w2"><h3>🛒 Sale-day calculator</h3><p>Move the sliders and watch the fleet grow. Desired ≈ instances × current ÷ target.</p><div id="c2"></div></div>
+<p>Best for web apps, REST APIs and anything behind an ALB. Choose the target from load testing: find the request rate at which latency starts to degrade, then leave headroom.</p>
+
+<h2>3. Memory utilization: when RAM is the bottleneck</h2>
+<p>A Java service holds data in memory. CPU is 25%, memory is 90%. A CPU-only policy sees plenty of room, while GC pressure and OOM errors loom. EC2 does not publish memory to CloudWatch by default, so install the <b>CloudWatch Agent</b> and use the custom metric (for example <code>mem_used_percent</code>) in a target tracking policy.</p>
+<p><b>Two caveats worth knowing:</b> a JVM often holds its heap near the configured maximum even when idle, so raw memory % can look high without real pressure. Target tracking also works best when the metric <i>falls</i> as instances are added, so use an average across the group, not a sum.</p>
+
+<h2>4. Queue depth: scale on pending work</h2>
+<p>Workers consume order emails, invoices, payments and reports from an SQS queue. Two workers, 2,000 waiting messages, low CPU, and a backlog that keeps growing. Scale on <b>backlog per instance</b>: <code>ApproximateNumberOfMessagesVisible ÷ running instances</code>, published as a custom metric.</p>
+<p>A better way to pick the target than guessing “50 messages”: <code>target = acceptable latency ÷ average processing time</code>. If a message takes 0.5 s and you can tolerate 25 s of wait, the target is 50 per worker.</p>
+<div class="w" id="w4"><h3>📬 Backlog calculator</h3><p>Tune the queue and see how many workers you need.</p><div id="c4"></div></div>
+
+<h2>5. Network throughput: when data transfer is the limit</h2>
+<p>For streaming or large downloads, CPU may sit at 30% while bandwidth saturates and response time rises. Predefined metrics <code>ASGAverageNetworkIn</code> and <code>ASGAverageNetworkOut</code> report average bytes per instance. Set the target from your instance type’s bandwidth, for example about 60–70% of its baseline. Network volume alone isn’t proof of saturation, so pick the direction that actually limits you (in or out).</p>
+
+<h2>6. Combining multiple policies</h2>
+<p>You can attach several target tracking policies at once. <b>Any</b> policy can trigger scale-out, and the ASG follows the one that asks for the most capacity. Scale-in is conservative: it happens only when <b>all</b> policies with scale-in enabled agree capacity can shrink.</p>
+<div class="w" id="w6"><h3>⚖️ Who wins?</h3><p>The group has 4 instances. Drag the load and see which policy drives the decision.</p><div id="c6"></div></div>
+
+<h2>7. How to choose</h2>
+<div class="w" id="w7"><h3>🧭 Find your metric</h3><p>What happens first when your load increases?</p><div class="tabs" id="t7"></div><div class="verdict" id="v7">Pick an answer above.</div></div>
+<table><tr><th>Workload</th><th>Metric to consider</th></tr><tr><td>CPU-intensive</td><td>CPU utilization</td></tr><tr><td>Website / REST API</td><td>ALB request count per target</td></tr><tr><td>Memory-intensive</td><td>Memory utilization (CloudWatch Agent)</td></tr><tr><td>Background jobs</td><td>Backlog per instance</td></tr><tr><td>Data transfer</td><td>Network in/out</td></tr></table>
+
+<h2>Practical tips before you ship</h2>
+<p><span class="tag">Load test first</span><span class="tag">Set instance warm-up</span><span class="tag">Watch scale-in</span><span class="tag">Alarm on max capacity</span></p>
+<p>Tune the instance warm-up time so new instances aren’t counted before they’re ready, load test to find real limits, and set a sensible maximum size so a bad metric can’t scale you into a surprise bill.</p>
+
+<h2>Conclusion</h2>
+<p>Auto Scaling isn’t just watching CPU and launching instances. It’s keeping enough capacity for changing workloads. Understand your bottleneck, pick a metric that represents real demand, and you’ll get a more responsive and cost-efficient architecture.</p>
+<p class="take">Don’t scale just because CPU is high. Scale on what your application actually needs.</p>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const sl=(id,l,min,max,v,step,fmt)=>`<div class="sl"><label>${l}</label><input type="range" id="${id}" min="${min}" max="${max}" value="${v}" step="${step||1}"><b id="${id}v"></b></div>`;
+const val=id=>+$(id).value;
+function fleet(n,old){let h='';for(let i=0;i<n;i++)h+=`<div class="srv${i>=old?' new':''}"></div>`;return `<div class="fleet">${h}</div>`}
+
+/* W1 */
+const M=['CPU','Memory','Requests/target','Queue backlog','Network'];
+const W=[
+ ['CPU-heavy batch',[88,40,45,15,30],'CPU is the limit, so CPU utilization is a good signal.'],
+ ['Web store on sale',[28,35,92,10,40],'CPU looks calm, but requests per target are near the limit. Use ALBRequestCountPerTarget.'],
+ ['Java in-memory cache',[25,91,40,10,20],'Memory is almost full while CPU says all is well. Use a CloudWatch Agent memory metric.'],
+ ['Queue workers',[22,35,10,95,15],'Backlog is growing while CPU is idle. Scale on backlog per instance.'],
+ ['Video streaming',[30,30,35,5,93],'Bandwidth is saturated. Use ASGAverageNetworkOut.']];
+$('t1').innerHTML=W.map((w,i)=>`<button data-i="${i}">${w[0]}</button>`).join('');
+function show1(i){document.querySelectorAll('#t1 button').forEach((b,j)=>b.classList.toggle('on',i==j));
+ $('b1').innerHTML=W[i][1].map((v,k)=>`<div class="row"><span>${M[k]}</span><div class="bar"><i class="${v>=80?'hot':''}" style="width:${v}%"></i></div><b>${v}%</b></div>`).join('');
+ $('v1').innerHTML='<b>'+W[i][0]+':</b> '+W[i][2]}
+$('t1').onclick=e=>{if(e.target.dataset.i)show1(+e.target.dataset.i)};show1(1);
+
+/* W2 */
+$('c2').innerHTML=sl('n2','Running instances',1,10,2)+sl('r2','Current requests per target (per minute)',50,1000,500,10)+sl('g2','Target requests per target',50,500,200,10)+'<div id="o2"></div>';
+function u2(){const n=val('n2'),r=val('r2'),g=val('g2'),d=Math.min(40,Math.ceil(n*r/g));
+ ['n2','r2','g2'].forEach(k=>$(k+'v').textContent=val(k));
+ $('o2').innerHTML=fleet(d,n)+`<div class="big">${n} → ${Math.max(d,1)} instances</div><div>${d>n?'Load per instance is above target, so scale out.':d<n?'Below target, so scale in is possible.':'Right-sized.'}</div>`}
+$('c2').oninput=u2;u2();
+
+/* W4 */
+$('c4').innerHTML=sl('m4','Messages waiting',0,5000,2000,50)+sl('w4','Running workers',1,20,2)+sl('p4','Avg processing time per message (s)',0.1,5,0.5,0.1)+sl('l4','Acceptable wait (s)',5,120,25,5)+'<div id="o4"></div>';
+function u4(){const m=val('m4'),w=val('w4'),p=val('p4'),l=val('l4'),t=Math.max(1,Math.round(l/p)),d=Math.min(40,Math.max(1,Math.ceil(m/t)));
+ ['m4','w4','p4','l4'].forEach(k=>$(k+'v').textContent=val(k));
+ $('o4').innerHTML=fleet(d,w)+`<div class="big">Backlog per worker: ${Math.round(m/w)} (target ${t})</div><div>Workers needed: <b>${d}</b> (currently ${w}).</div>`}
+$('c4').oninput=u4;u4();
+
+/* W6 */
+$('c6').innerHTML=sl('a6','CPU % (target 60)',5,100,40)+sl('b6','Memory % (target 75)',5,100,50)+sl('c6x','Requests per target (target 200)',20,600,150,10)+'<div id="o6"></div>';
+function u6(){const n=4,v=[val('a6'),val('b6'),val('c6x')],t=[60,75,200],nm=['CPU','Memory','Requests'];
+ ['a6','b6','c6x'].forEach(k=>$(k+'v').textContent=val(k));
+ const d=v.map((x,i)=>Math.max(1,Math.ceil(n*x/t[i]))),mx=Math.max(...d),w=d.indexOf(mx);
+ $('o6').innerHTML=d.map((x,i)=>`<div class="row"><span>${nm[i]} wants</span><div class="bar"><i class="${i==w?'hot':''}" style="width:${Math.min(100,x*100/16)}%"></i></div><b>${x}</b></div>`).join('')+fleet(mx,n)+`<div class="big">${mx>n?'Scale out to '+mx:mx<n?'All agree: scale in to '+mx:'Hold at '+n}</div><div>${mx>n?nm[w]+' needs the most capacity, so it wins.':mx<n?'Scale-in only happens because every policy agrees.':'At least one policy still needs all 4.'}</div>`}
+$('c6').oninput=u6;u6();
+
+/* W7 */
+const Q=[['CPU saturates first','CPU utilization','Typical for compute-heavy work. Start at a 50–60% target.'],['Requests exceed capacity','ALBRequestCountPerTarget','Predefined metric. Find your target through load testing.'],['Memory fills up','Memory utilization','Needs CloudWatch Agent. Watch JVM heap behaviour.'],['Queue keeps growing','Backlog per instance','Custom metric. Target = acceptable latency ÷ processing time.'],['Bandwidth maxes out','ASGAverageNetworkIn/Out','Pick the direction that limits you, relative to instance bandwidth.']];
+$('t7').innerHTML=Q.map((q,i)=>`<button data-i="${i}">${q[0]}</button>`).join('');
+$('t7').onclick=e=>{const i=e.target.dataset.i;if(i===undefined)return;document.querySelectorAll('#t7 button').forEach((b,j)=>b.classList.toggle('on',j==i));$('v7').innerHTML=`Use <b>${Q[i][1]}</b>. ${Q[i][2]}`};
+</script>
+</body>
+</html>
