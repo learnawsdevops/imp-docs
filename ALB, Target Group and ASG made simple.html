@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ALB, Target Group and ASG made simple</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap">
+<style>
+:root{--bg:#f6f8fb;--card:#fff;--ink:#16202e;--mut:#5b6778;--line:#d9e0ea;--alb:#3b6cf0;--tg:#d98a00;--asg:#1f9d6b;--bad:#d6453d;--albs:#e6edff;--tgs:#fff1d6;--asgs:#dcf5ea;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e141d;--card:#17202c;--ink:#e8eef7;--mut:#9aa7b9;--line:#2a3646;--alb:#7da0ff;--tg:#f2b43a;--asg:#4fd19a;--bad:#ff7a70;--albs:#1d2a4d;--tgs:#40320f;--asgs:#143a2c;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0e141d;--card:#17202c;--ink:#e8eef7;--mut:#9aa7b9;--line:#2a3646;--alb:#7da0ff;--tg:#f2b43a;--asg:#4fd19a;--bad:#ff7a70;--albs:#1d2a4d;--tgs:#40320f;--asgs:#143a2c;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px);scroll-behavior:smooth}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Bricolage Grotesque",system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:860px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:clamp(28px,6vw,44px);line-height:1.1;margin:8px 0 10px;font-weight:800}
+h2{font-size:24px;margin:44px 0 6px;font-weight:800}
+h3{margin:0 0 4px;font-size:18px}
+p{margin:6px 0}.mut{color:var(--mut)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+button{font:inherit;cursor:pointer;color:var(--ink)}
+.theme{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:4px 12px}
+.one{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-top:14px}
+.A{color:var(--alb);font-weight:800}.T{color:var(--tg);font-weight:800}.S{color:var(--asg);font-weight:800}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;border-top:5px solid var(--c)}
+.card ul{margin:6px 0 0;padding-left:18px}.card li{margin:3px 0}
+.rem{margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--s);font-size:15px}
+.svgbox{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:8px;margin-top:12px}
+svg{width:100%;height:auto;display:block}
+svg text{font-family:inherit;fill:var(--ink)}
+.n{cursor:pointer}.n rect{stroke-width:2;transition:.2s}.n:hover rect,.n:focus rect{stroke-width:4}
+.n.hi rect{stroke-width:5;filter:drop-shadow(0 0 6px var(--sc))}
+.n.dim{opacity:.35}
+.ln{stroke:var(--mut);stroke-width:2;fill:none}
+.flow{stroke-dasharray:6 6;animation:d 1s linear infinite}
+@keyframes d{to{stroke-dashoffset:-12}}
+@media (prefers-reduced-motion:reduce){.flow{animation:none}}
+.info{margin-top:10px;padding:12px 14px;border-radius:12px;background:var(--card);border:1px solid var(--line);border-left:6px solid var(--mut);min-height:84px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.btn{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px}
+.btn.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.steps{margin:10px 0 0;padding:0;list-style:none}
+.steps li{padding:8px 12px;margin:6px 0;border-radius:10px;border:1px solid var(--line);background:var(--card);opacity:.45}
+.steps li.cur{opacity:1;border-color:var(--ink);font-weight:600}.steps li.done{opacity:.8}
+.tw{overflow-x:auto;margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:560px;font-size:14.5px}
+th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--bg)}td:first-child{font-weight:600}
+.bad{color:var(--bad)}
+.agree{display:grid;gap:10px;margin-top:12px}
+.ag{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;gap:4px}
+.tags span{display:inline-block;font-size:13px;font-weight:600;padding:1px 9px;border-radius:12px;margin-right:6px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-top:12px}
+.opt{display:block;width:100%;text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 12px;margin:6px 0}
+.opt.ok{border-color:var(--asg);background:var(--asgs)}.opt.no{border-color:var(--bad)}
+.cheat{background:var(--ink);color:var(--bg);border-radius:14px;padding:16px;margin-top:12px}
+.cheat b{color:inherit}.cheat div{margin:6px 0}
+.mix{margin-top:10px}.mix div{padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin:8px 0}
+</style></head><body><main>
+<div class="top"><span class="mut">AWS load balancing, the easy way</span><button class="theme" id="th" aria-label="Toggle theme">Dark / Light</button></div>
+<h1>ALB, Target Group and ASG: who does what?</h1>
+<p class="mut">Three services that always show up together. Read top to bottom once, then use the quiz and cheat sheet to lock it in.</p>
+<div class="one"><span class="A">ALB</span> decides <b>where</b> each request goes. <span class="T">Target Group</span> is the <b>list of healthy places</b> it can go. <span class="S">ASG</span> <b>keeps that list full</b> by adding and removing servers.</div>
+
+<h2>Think of a restaurant</h2>
+<div class="grid">
+<div class="card" style="--c:var(--alb);--s:var(--albs)"><h3 class="A">ALB = the host</h3><p>Greets every guest, reads what they want (path, host name) and sends them to the right section.</p></div>
+<div class="card" style="--c:var(--tg);--s:var(--tgs)"><h3 class="T">Target Group = the table list</h3><p>Only tables that are clean and ready are on it. A broken table gets crossed off (failed health check).</p></div>
+<div class="card" style="--c:var(--asg);--s:var(--asgs)"><h3 class="S">ASG = the manager</h3><p>Busy night? Opens more tables. Quiet? Closes some. Table breaks? Replaces it.</p></div>
+</div>
+
+<h2>The big picture (tap any box)</h2>
+<p class="mut">Traffic flows left to right. The dashed green arrow shows the ASG registering new servers into the Target Group by itself.</p>
+<div class="svgbox"><svg id="dg" viewBox="0 0 700 340" role="img" aria-label="Flow from user to ALB to target group to EC2 instances inside an auto scaling group">
+<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--mut)"/></marker></defs>
+<rect x="500" y="22" width="190" height="296" rx="14" fill="var(--asgs)" stroke="var(--asg)" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="595" y="44" text-anchor="middle" font-weight="800" fill="var(--asg)" style="fill:var(--asg)">Auto Scaling Group</text>
+<path class="ln flow" d="M100 168H158" marker-end="url(#ar)"/><path class="ln flow" d="M290 168H348" marker-end="url(#ar)"/>
+<path class="ln flow" d="M470 168H490V91H528" marker-end="url(#ar)"/><path class="ln flow" d="M490 168H528" marker-end="url(#ar)"/><path class="ln flow" d="M490 168V247H528" marker-end="url(#ar)"/>
+<path d="M595 318Q595 336 410 330Q410 270 410 212" fill="none" stroke="var(--asg)" stroke-width="2.5" stroke-dasharray="3 5" marker-end="url(#ar)"/>
+<text x="470" y="326" font-size="13" style="fill:var(--asg)">registers / deregisters</text>
+<g class="n" data-k="user" tabindex="0"><rect x="10" y="138" width="90" height="60" rx="12" fill="var(--card)" stroke="var(--mut)"/><text x="55" y="173" text-anchor="middle" font-weight="600">User</text></g>
+<g class="n" data-k="alb" tabindex="0" style="--sc:var(--alb)"><rect x="158" y="118" width="132" height="100" rx="12" fill="var(--albs)" stroke="var(--alb)"/><text x="224" y="150" text-anchor="middle" font-weight="800" style="fill:var(--alb)">ALB</text><text x="224" y="172" text-anchor="middle" font-size="13">Listener :443</text><text x="224" y="192" text-anchor="middle" font-size="13">Rules (path/host)</text></g>
+<g class="n" data-k="tg" tabindex="0" style="--sc:var(--tg)"><rect x="348" y="118" width="122" height="100" rx="12" fill="var(--tgs)" stroke="var(--tg)"/><text x="409" y="150" text-anchor="middle" font-weight="800" style="fill:var(--tg)">Target Group</text><text x="409" y="174" text-anchor="middle" font-size="13">Health checks</text><text x="409" y="194" text-anchor="middle" font-size="13">Healthy list</text></g>
+<g class="n" data-k="ec1" tabindex="0" style="--sc:var(--asg)"><rect x="528" y="56" width="144" height="70" rx="10" fill="var(--card)" stroke="var(--asg)"/><text x="600" y="88" text-anchor="middle" font-weight="600">EC2 (AZ-a)</text><text x="600" y="108" text-anchor="middle" font-size="13" style="fill:var(--asg)">healthy</text></g>
+<g class="n" data-k="ec2" tabindex="0" style="--sc:var(--asg)"><rect x="528" y="134" width="144" height="70" rx="10" fill="var(--card)" stroke="var(--asg)"/><text x="600" y="166" text-anchor="middle" font-weight="600">EC2 (AZ-b)</text><text x="600" y="186" text-anchor="middle" font-size="13" style="fill:var(--asg)">healthy</text></g>
+<g class="n" data-k="ec3" tabindex="0" style="--sc:var(--asg)"><rect x="528" y="212" width="144" height="70" rx="10" fill="var(--card)" stroke="var(--asg)"/><text x="600" y="244" text-anchor="middle" font-weight="600">EC2 (AZ-c)</text><text x="600" y="264" text-anchor="middle" font-size="13" style="fill:var(--asg)">healthy</text></g>
+</svg></div>
+<div class="info" id="info"><b>Tap a box above.</b> You will get a plain-language explanation here.</div>
+
+<h2>Watch it happen</h2>
+<p class="mut">Pick a situation, then tap Next step. The diagram lights up the parts involved.</p>
+<div class="btns" id="sc"></div>
+<ul class="steps" id="st"></ul>
+<div class="btns"><button class="btn" id="nx">Next step</button><button class="btn" id="rs">Reset</button></div>
+
+<h2>One card per concept</h2>
+<div class="grid">
+<div class="card" style="--c:var(--alb);--s:var(--albs)"><h3 class="A">ALB</h3><ul><li>Layer 7 (understands HTTP)</li><li>Listener = port + protocol</li><li>Rules route by path, host, header</li><li>Needs 2+ AZs, has a security group</li></ul><div class="rem"><b>Remember:</b> ALB never points at servers directly. It points at a Target Group.</div></div>
+<div class="card" style="--c:var(--tg);--s:var(--tgs)"><h3 class="T">Target Group</h3><ul><li>Target type: instance, IP, Lambda</li><li>Runs health checks</li><li>Only healthy targets get traffic</li><li>Has deregistration delay and stickiness</li></ul><div class="rem"><b>Remember:</b> The TG is the meeting point. ALB reads it, ASG writes to it.</div></div>
+<div class="card" style="--c:var(--asg);--s:var(--asgs)"><h3 class="S">ASG</h3><ul><li>Launch template = the blueprint</li><li>Min / Desired / Max</li><li>Scaling policies add or remove</li><li>Replaces unhealthy instances</li></ul><div class="rem"><b>Remember:</b> ASG is attached to the TG. That link is the magic.</div></div>
+</div>
+
+<h2>Settings you should know</h2>
+<p class="mut">Pick a component. Red lines say what breaks when it is wrong.</p>
+<div class="btns" id="tabs"></div>
+<div class="tw"><table><thead><tr><th>Setting</th><th>Default</th><th>What it does</th><th>Change it when</th></tr></thead><tbody id="tb"></tbody></table></div>
+
+<h2>Settings that must agree</h2>
+<p class="mut">Most real outages live here. Each item links two components.</p>
+<div class="agree" id="ag"></div>
+
+<h2>Common mix-ups</h2>
+<div class="mix">
+<div><b>ALB or NLB?</b> ALB for HTTP/HTTPS and smart routing (Layer 7). NLB for TCP/UDP, extreme speed, static IPs (Layer 4).</div>
+<div><b>Unhealthy in TG, but ASG did nothing?</b> The ASG health check type is still EC2. Switch it to ELB.</div>
+<div><b>Is cross-zone load balancing optional?</b> On an ALB it is always on. On an NLB you choose.</div>
+<div><b>Who stops a bad server getting traffic?</b> The Target Group (health check). Who replaces it? The ASG.</div>
+<div><b>Scale on what?</b> For web apps, ALBRequestCountPerTarget in a target tracking policy is the cleanest signal.</div>
+</div>
+
+<h2>Quick quiz</h2>
+<div id="qz"></div>
+
+<h2>Cheat sheet</h2>
+<div class="cheat">
+<div><b>Flow:</b> User → ALB (listener, rule) → Target Group (healthy only) → EC2 in ASG</div>
+<div><b>ALB:</b> routes by path, host, header. Layer 7. 2+ AZs.</div>
+<div><b>TG:</b> health check path returns 200 · dereg delay 300s · interval 30s · unhealthy 2 · healthy 5</div>
+<div><b>ASG:</b> min / desired / max · launch template · health check type ELB · grace period over boot time</div>
+<div><b>Glue:</b> ASG attached to TG → auto register and deregister</div>
+<div><b>Must match:</b> TG port = app port · instance SG allows ALB SG · health path = 200</div>
+</div>
+</main>
+<script>
+const $=s=>document.querySelector(s);
+try{const t=localStorage.getItem("th");if(t)document.documentElement.dataset.theme=t}catch(e){}
+$("#th").onclick=()=>{const d=document.documentElement,dark=(d.dataset.theme?d.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches);d.dataset.theme=dark?"light":"dark";try{localStorage.setItem("th",d.dataset.theme)}catch(e){}};
+const INFO={
+user:["Someone on a browser or app. They only know one address: the ALB’s DNS name. They never see your servers.","var(--mut)"],
+alb:["The front door. A <b>listener</b> waits on a port (like 443). <b>Rules</b> look at the request (path, host, header) and choose a Target Group. It spreads load across AZs.","var(--alb)"],
+tg:["The list of places traffic can go, plus a health check that removes sick ones. The ALB reads this list. The ASG keeps it updated.","var(--tg)"],
+ec1:["A real server launched by the ASG from the launch template. When healthy, it receives traffic.","var(--asg)"],
+ec2:["Another server, in a different AZ. Spreading across AZs keeps you alive if one data center fails.","var(--asg)"],
+ec3:["A third server. When traffic grows, the ASG adds more like this one. When it drops, it removes them.","var(--asg)"]};
+const nodes=[...document.querySelectorAll(".n")];
+nodes.forEach(n=>{const f=()=>{const k=n.dataset.k;$("#info").innerHTML=INFO[k][0];$("#info").style.borderLeftColor=INFO[k][1]};n.onclick=f;n.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();f()}}});
+function light(keys){nodes.forEach(n=>{n.classList.toggle("hi",keys.includes(n.dataset.k));n.classList.toggle("dim",keys.length>0&&!keys.includes(n.dataset.k))})}
+const SC={
+"Traffic spike":[["Requests jump. Every instance gets busier.",["alb","ec1","ec2","ec3"]],["Metric (CPU or requests per target) crosses the target value.",["ec1","ec2","ec3"]],["ASG raises desired capacity and launches a new instance (up to max).",["ec3"]],["New instance boots, then the ASG registers it in the Target Group.",["tg","ec3"]],["Health check passes. ALB starts sending it traffic. Load evens out.",["alb","tg","ec3"]]],
+"Instance crashes":[["App on one instance stops answering.",["ec2"]],["Target Group health check fails, 2 times in a row (unhealthy threshold).",["tg","ec2"]],["ALB stops routing to it. Users keep working on the other two.",["alb","ec1","ec3"]],["ASG (health type ELB) sees it as unhealthy and terminates it.",["ec2"]],["ASG launches a replacement, registers it, and you are back to normal.",["tg","ec2"]]],
+"Deploy new version":[["Update the launch template with the new AMI.",["ec1","ec2","ec3"]],["Start an instance refresh. ASG replaces instances in small batches.",["ec1"]],["Old instance is deregistered. Deregistration delay lets in-flight requests finish.",["tg","ec1"]],["New instance registers and must pass health checks before it counts.",["tg","ec1"]],["Repeat for the rest. Users never see downtime.",["alb","ec2","ec3"]]]};
+let cur=null,i=0;
+SC&&Object.keys(SC).forEach(k=>{const b=document.createElement("button");b.className="btn";b.textContent=k;b.onclick=()=>{cur=k;i=0;[...$("#sc").children].forEach(x=>x.classList.toggle("on",x===b));draw()};$("#sc").appendChild(b)});
+function draw(){const ul=$("#st");ul.innerHTML="";if(!cur){light([]);return}SC[cur].forEach((s,j)=>{const li=document.createElement("li");li.textContent=(j+1)+". "+s[0];li.className=j<i?"done":j===i?"cur":"";if(j<=i)li.style.opacity=1;ul.appendChild(li)});light(SC[cur][Math.min(i,SC[cur].length-1)][1])}
+$("#nx").onclick=()=>{if(!cur){$("#st").innerHTML="<li class='cur'>Pick a situation first.</li>";return}if(i<SC[cur].length-1){i++;draw()}};
+$("#rs").onclick=()=>{cur=null;i=0;[...$("#sc").children].forEach(x=>x.classList.remove("on"));draw()};
+const ST={
+ALB:[["Scheme","internet-facing","Public or private entry","Internal apps → internal"],["Subnets","2+ AZs","Where the ALB lives","Always spread across AZs"],["Listener","80 / 443","Port and protocol to accept","Add 443 + ACM certificate"],["Rules","priority order","Condition (path, host, header) → action (forward, redirect, fixed reply)","Microservices, blue/green with weights"],["Idle timeout","60s","How long a quiet connection stays open","Long uploads or websockets"],["Security group","you set it","Who can reach the ALB","Allow 80/443 from internet"],["Cross-zone","always on","Spreads evenly across all AZs","Nothing to change on ALB"]],
+"Target Group":[["Target type","instance","instance, ip, lambda","Containers or on-prem → ip"],["Port / protocol","you set it","Where the app listens <span class='bad'>Wrong port = all unhealthy</span>","Must match the app"],["Health check path","/","URL the ALB probes <span class='bad'>Not 200 = replaced in a loop</span>","Use a light /health"],["Interval / timeout","30s / 5s","How often and how long to wait","Faster failover → lower"],["Healthy / unhealthy threshold","5 / 2","Checks to flip state","Lower healthy for quicker recovery"],["Deregistration delay","300s","Time to finish in-flight requests","Short APIs → 30s"],["Stickiness / algorithm","off / round robin","Same user to same target; or least outstanding requests","Session apps; uneven loads"]],
+ASG:[["Launch template","required","AMI, type, SG, IAM role, user data","Every new version"],["Min / Desired / Max","you set it","Floor, current size, ceiling","Min ≥ 2 for high availability"],["Subnets / AZs","you set it","Where instances launch","Pick 2+ AZs"],["Target groups","none","Where to register instances <span class='bad'>Not attached = no traffic</span>","Always attach for web apps"],["Health check type","EC2","EC2 = hardware only, ELB = app too","Set ELB behind an ALB"],["Grace period","300s","Wait before checking new instance <span class='bad'>Too short = kill loop</span>","Longer than boot time"],["Scaling policy","none","Target tracking, step, scheduled, predictive","ALBRequestCountPerTarget"],["Termination policy","default","Which instance to remove first","Oldest launch template first"]]};
+const col={ALB:"var(--alb)","Target Group":"var(--tg)",ASG:"var(--asg)"};
+Object.keys(ST).forEach((k,j)=>{const b=document.createElement("button");b.className="btn"+(j?"":" on");b.textContent=k;b.onclick=()=>{[...$("#tabs").children].forEach(x=>x.classList.toggle("on",x===b));fill(k)};$("#tabs").appendChild(b)});
+function fill(k){$("#tb").innerHTML=ST[k].map(r=>"<tr><td style='color:"+col[k]+"'>"+r[0]+"</td><td>"+r[1]+"</td><td>"+r[2]+"</td><td>"+r[3]+"</td></tr>").join("")}
+fill("ALB");
+const AG=[["Port","TG","Instance","TG port must equal the port your app listens on."],["Security groups","ALB","Instance","Instance SG should allow traffic from the ALB’s SG, not the whole internet."],["Health path","TG","Instance","The path must return 200, or healthy servers get replaced forever."],["Grace period","ASG","Instance","Must be longer than boot time, or new servers are killed while starting."],["Health type","ASG","TG","Set to ELB so the ASG reacts when the app is down but EC2 is up."],["Dereg delay","TG","ALB","Should cover your longest request, or scale-in drops users mid-request."],["Scaling metric","ASG","ALB","ALBRequestCountPerTarget ties real traffic to server count."]];
+const tc={ALB:"alb",TG:"tg",ASG:"asg",Instance:"mut"};
+$("#ag").innerHTML=AG.map(a=>"<div class='ag'><div class='tags'><b>"+a[0]+"</b> "+[a[1],a[2]].map(t=>"<span style='background:var(--"+(tc[t]==="mut"?"line":tc[t]+"s")+");color:var(--"+(tc[t]==="mut"?"ink":tc[t])+")'>"+t+"</span>").join("↔ ")+"</div><div>"+a[3]+"</div></div>").join("");
+const Q=[["Which component decides where a request goes?",["ALB","ASG","Target Group"],0,"The ALB’s listener rules choose the Target Group."],["Who registers new instances into the Target Group?",["The ALB","The ASG","You, manually"],1,"The ASG is attached to the TG and does it automatically."],["App crashed but EC2 is running. ASG did not replace it. Why?",["Min size too low","Grace period too long","Health check type is EC2, not ELB"],2,"With EC2 type, ASG only sees hardware health."],["New instances keep dying right after launch. Likely cause?",["Grace period shorter than boot time","Cross-zone off","Idle timeout too high"],0,"ASG checks health before the app has started."],["Best scaling metric linking ALB traffic to ASG size?",["NetworkIn","ALBRequestCountPerTarget","DiskReadOps"],1,"It measures requests per server directly."]];
+$("#qz").innerHTML=Q.map((q,n)=>"<div class='q'><b>"+(n+1)+". "+q[0]+"</b>"+q[1].map((o,j)=>"<button class='opt' data-n='"+n+"' data-j='"+j+"'>"+o+"</button>").join("")+"<div class='mut' id='ex"+n+"'></div></div>").join("");
+document.querySelectorAll(".opt").forEach(b=>b.onclick=()=>{const n=+b.dataset.n,j=+b.dataset.j,q=Q[n];const sib=[...b.parentNode.querySelectorAll(".opt")];sib.forEach(x=>x.disabled=true);sib[q[2]].classList.add("ok");if(j!==q[2])b.classList.add("no");$("#ex"+n).textContent=(j===q[2]?"Correct. ":"Not quite. ")+q[3]});
+</script></body></html>
